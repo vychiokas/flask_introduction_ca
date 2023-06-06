@@ -37,8 +37,8 @@ def new_child():
     db.create_all()
     forma = forms.ChildForm()
     if forma.validate_on_submit():
-        new_child = Child(vardas=forma.name.data,
-                               pavarde=forma.surname.data)
+        new_child = Child(name=forma.name.data,
+                          surname=forma.surname.data)
         db.session.add(new_child)
         db.session.commit()
         return "child created"

@@ -1,5 +1,6 @@
 from app import db
 
+
 class Father(db.Model):
     __tablename__ = "father"
     id = db.Column(db.Integer, primary_key=True)

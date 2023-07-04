@@ -3,14 +3,43 @@ from flask import Flask, render_template, redirect, url_for, flash, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager, current_user, logout_user, login_user, UserMixin, login_required
-import forms
+
+from sqlalchemy import DateTime
+from datetime import datetime
+import secrets
+from PIL import Image
+from flask_admin import Admin
+from flask_admin.contrib.sqla import ModelView
+
+
+class ManoModelView(ModelView):
+    def is_accessible(self):
+        return current_user.is_authenticated and current_user.el_pastas == "asdf@gmail.com"
+
+
+def save_picture(form_picture):
+    random_hex = secrets.token_hex(8)
+    _, f_ext = os.path.splitext(form_picture.filename)
+    picture_fn = random_hex + f_ext
+    picture_path = os.path.join(app.root_path,
+                                'static/profilio_nuotraukos', picture_fn)
+
+    output_size = (125, 125)
+    i = Image.open(form_picture)
+    i.thumbnail(output_size)
+    i.save(picture_path)
+
+    return picture_fn
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 app = Flask(__name__)
 app.config['SECRET_KEY'] = '4654f5dfadsrfasdr54e6rae'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'biudzetas.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+db = SQLAlchemy()
+
+db.init_app(app)
+
 
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
@@ -24,8 +53,26 @@ class Vartotojas(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     vardas = db.Column("Vardas", db.String(20), unique=True, nullable=False)
     el_pastas = db.Column("El. pašto adresas", db.String(120), unique=True, nullable=False)
+    nuotrauka = db.Column(db.String(20), nullable=False, default='default.jpg')
     slaptazodis = db.Column("Slaptažodis", db.String(60), unique=True, nullable=False)
+
+
+class Irasas(db.Model):
+    __tablename__ = "irasas"
+    id = db.Column(db.Integer, primary_key=True)
+    data = db.Column("Data", DateTime, default=datetime.now())
+    pajamos = db.Column("Pajamos", db.Boolean)
+    suma = db.Column("Vardas", db.Integer)
+    vartotojas_id = db.Column(db.Integer, db.ForeignKey("vartotojas.id"))
+    vartotojas = db.relationship("Vartotojas", lazy=True)
     
+
+admin = Admin(app)
+# admin.add_view(ModelView(Irasas, db.session))
+admin.add_view(ManoModelView(Vartotojas, db.session))
+
+
+import forms
 
 @login_manager.user_loader
 def load_user(user_id: str) -> Vartotojas:
@@ -79,6 +126,27 @@ def index():
 @login_required
 def irasai():
     return render_template('irasai.html', title='Įrašai')
+
+
+@app.route("/paskyra", methods=['GET', 'POST'])
+@login_required
+def paskyra():
+    form = forms.PaskyrosAtnaujinimoForma()
+    
+    if form.validate_on_submit():
+        if form.nuotrauka.data:
+            nuotrauka = save_picture(form.nuotrauka.data)
+            current_user.nuotrauka = nuotrauka
+        current_user.vardas = form.vardas.data
+        current_user.el_pastas = form.el_pastas.data
+        db.session.commit()
+        flash('Tavo paskyra atnaujinta!', 'success')
+        return redirect(url_for('paskyra'))
+    elif request.method == 'GET':
+        form.vardas.data = current_user.vardas
+        form.el_pastas.data = current_user.el_pastas
+    nuotrauka = url_for('static', filename='profilio_nuotraukos/' + current_user.nuotrauka)
+    return render_template('paskyra.html', title='Account', form=form, nuotrauka=nuotrauka)
 
 
 if __name__ == '__main__':

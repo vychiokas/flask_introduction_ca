@@ -36,9 +36,8 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = '4654f5dfadsrfasdr54e6rae'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'biudzetas.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy()
+db = SQLAlchemy(app)
 
-db.init_app(app)
 
 
 bcrypt = Bcrypt(app)
@@ -122,10 +121,10 @@ def index():
     return render_template("index.html")
 
 
-@app.route("/irasai")
-@login_required
-def irasai():
-    return render_template('irasai.html', title='Įrašai')
+# @app.route("/irasai")
+# @login_required
+# def irasai():
+#     return render_template('irasai.html', title='Įrašai')
 
 
 @app.route("/paskyra", methods=['GET', 'POST'])
@@ -147,6 +146,30 @@ def paskyra():
         form.el_pastas.data = current_user.el_pastas
     nuotrauka = url_for('static', filename='profilio_nuotraukos/' + current_user.nuotrauka)
     return render_template('paskyra.html', title='Account', form=form, nuotrauka=nuotrauka)
+
+
+@app.route("/naujas_irasas", methods=["GET", "POST"])
+def new_record():
+    db.create_all()
+    forma = forms.IrasasForm()
+    if forma.validate_on_submit():
+        naujas_irasas = Irasas(pajamos=forma.pajamos.data, suma=forma.suma.data, vartotojas_id=current_user.id)
+        db.session.add(naujas_irasas)
+        db.session.commit()
+        flash(f"Įrašas sukurtas", 'success')
+        return redirect(url_for('records'))
+    return render_template("prideti_irasa.html", form=forma)
+
+@app.route("/irasai")
+@login_required
+def records():
+    db.create_all()
+    try:
+        visi_irasai = Irasas.query.filter_by(vartotojas_id=current_user.id).all()
+    except:
+        visi_irasai = []
+    print(visi_irasai)
+    return render_template("irasai.html", visi_irasai=visi_irasai, datetime=datetime)
 
 
 if __name__ == '__main__':
